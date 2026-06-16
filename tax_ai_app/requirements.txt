@@ -10,3 +10,5 @@ pyinstaller
 openpyxl
 bcrypt
 python-multipart
+pymupdf
+pdfplumber

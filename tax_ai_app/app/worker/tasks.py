@@ -4,9 +4,12 @@ import traceback
 from app.database import get_db
 from app.models.tax_job import TaxJob
 from app.models.upload_round import UploadRound
+from app.models.job_file import JobFile
 from app.models.processing_log import ProcessingLog
 from app.services.zip_service import extract_zip
 from app.services.file_inventory_service import build_file_inventory
+from app.services.excel_service import parse_excel_or_csv
+from app.services.pdf_service import parse_pdf
 
 def process_tax_job_task(job_id: int):
     """Core task loop to process tax jobs in the background queue."""
@@ -32,8 +35,8 @@ def process_tax_job_task(job_id: int):
         db.commit()
         print(f"[Worker] Job ID {job_id} status updated to PROCESSING.")
 
-    # 2. Fetch the initial upload round and run processing
     try:
+        # 2. Fetch the initial upload round and run extraction and inventory
         with get_db() as db:
             round_record = db.query(UploadRound).filter(
                 UploadRound.tax_job_id == job_id,
@@ -52,8 +55,98 @@ def process_tax_job_task(job_id: int):
             # B. Index files into DB inventory
             build_file_inventory(job_id, round_record.id, extracted_dir, db)
 
-        # 3. Simulate analysis processing phase (e.g. OCR, rules engine)
-        time.sleep(5)
+        # 3. Read the indexed files and parse text/table content
+        with get_db() as db:
+            # Query all files associated with this job
+            job_files = db.query(JobFile).filter(JobFile.tax_job_id == job_id).all()
+            print(f"[Worker] Found {len(job_files)} files in inventory to parse.")
+
+            parsed_count = 0
+            ocr_fallback_count = 0
+
+            for file_record in job_files:
+                # Resolve full path to file
+                physical_file_path = os.path.join(os.getcwd(), file_record.file_path)
+                ext = file_record.file_type.lower()
+                
+                print(f"[Worker] Parsing file: {file_record.file_name} (Type: {ext})")
+
+                try:
+                    # Parse Spreadsheets (Excel / CSV)
+                    if ext in ["xlsx", "xlsm", "csv"]:
+                        extracted_text, method, score = parse_excel_or_csv(physical_file_path)
+                        
+                        # Save extracted text representation next to it on local disk
+                        txt_path = physical_file_path + ".txt"
+                        with open(txt_path, "w", encoding="utf-8") as f:
+                            f.write(extracted_text)
+
+                        # Update DB metadata
+                        file_record.extraction_method = method
+                        file_record.confidence_score = score
+                        file_record.is_processed = True
+                        parsed_count += 1
+
+                    # Parse PDFs
+                    elif ext == "pdf":
+                        extracted_text, method, score, page_count, requires_ocr = parse_pdf(physical_file_path)
+                        file_record.page_count = page_count
+
+                        if requires_ocr:
+                            # Mark as requiring local OCR fallback
+                            file_record.extraction_method = "PENDING_OCR"
+                            file_record.is_processed = False
+                            ocr_fallback_count += 1
+                            
+                            # Log warning in DB
+                            warning_log = ProcessingLog(
+                                tax_job_id=job_id,
+                                level=ProcessingLog.LEVEL_WARNING,
+                                message=f"Selectable text yield is empty for {file_record.file_name}. Scanned PDF requires OCR fallback."
+                            )
+                            db.add(warning_log)
+                        else:
+                            # Save extracted text representation next to it on local disk
+                            txt_path = physical_file_path + ".txt"
+                            with open(txt_path, "w", encoding="utf-8") as f:
+                                f.write(extracted_text)
+
+                            # Update DB metadata
+                            file_record.extraction_method = method
+                            file_record.confidence_score = score
+                            file_record.is_processed = True
+                            parsed_count += 1
+                            
+                    # Other unsupported files
+                    else:
+                        file_record.extraction_method = "UNSUPPORTED"
+                        file_record.is_processed = False
+                        
+                except Exception as file_parse_err:
+                    print(f"[Worker] Failed to parse file {file_record.file_name}: {file_parse_err}")
+                    file_record.extraction_method = "FAILED"
+                    file_record.is_processed = False
+                    
+                    err_log = ProcessingLog(
+                        tax_job_id=job_id,
+                        level=ProcessingLog.LEVEL_WARNING,
+                        message=f"Failed to parse file {file_record.file_name}: {str(file_parse_err)}"
+                    )
+                    db.add(err_log)
+
+            db.commit()
+            
+            # Log parsing outcome summary
+            parsing_summary_log = ProcessingLog(
+                tax_job_id=job_id,
+                level=ProcessingLog.LEVEL_INFO,
+                message=f"Text parsing phase complete. Deterministically parsed: {parsed_count} files. Scanned/OCR pending: {ocr_fallback_count} files."
+            )
+            db.add(parsing_summary_log)
+            db.commit()
+
+        # 4. Simulate final phase checks before review
+        time.sleep(3)
 
         with get_db() as db:
             job = db.query(TaxJob).filter(TaxJob.id == job_id).first()
