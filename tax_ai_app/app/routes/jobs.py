@@ -1,3 +1,93 @@
-from fastapi import APIRouter
+from fastapi import APIRouter, Depends, Request, Form, UploadFile, File, status
+from fastapi.responses import HTMLResponse, RedirectResponse
+from fastapi.templating import Jinja2Templates
+from sqlalchemy.orm import Session
+import os
+import shutil
+
+from app.database import get_db_session
+from app.models.tax_job import TaxJob
+from app.models.upload_round import UploadRound
+from app.routes.auth import get_current_user_from_cookie
 
 router = APIRouter(prefix="/jobs", tags=["Jobs"])
+templates = Jinja2Templates(directory="templates")
+
+@router.get("/new", response_class=HTMLResponse)
+def get_upload_form(request: Request, error: str | None = None, db: Session = Depends(get_db_session)):
+    user = get_current_user_from_cookie(request, db)
+    if not user:
+        return RedirectResponse(url="/login", status_code=status.HTTP_303_SEE_OTHER)
+
+    return templates.TemplateResponse(
+        request=request,
+        name="upload_job.html",
+        context={"user": user, "error": error}
+    )
+
+@router.post("")
+def upload_job(
+    request: Request,
+    client_name: str = Form(...),
+    client_email: str = Form(...),
+    tax_year: int = Form(...),
+    return_type: str = Form(...),
+    zip_file: UploadFile = File(...),
+    db: Session = Depends(get_db_session)
+):
+    user = get_current_user_from_cookie(request, db)
+    if not user:
+        return RedirectResponse(url="/login", status_code=status.HTTP_303_SEE_OTHER)
+
+    # 1. Enforce strict .zip extension validation
+    if not zip_file.filename.endswith(".zip"):
+        return RedirectResponse(
+            url="/jobs/new?error=Invalid+file+type.+Please+upload+a+valid+.zip+archive.",
+            status_code=status.HTTP_303_SEE_OTHER
+        )
+
+    # 2. Write tax_job base record to DB to obtain a unique ID
+    new_job = TaxJob(
+        client_name=client_name,
+        client_email=client_email,
+        tax_year=tax_year,
+        return_type=return_type,
+        status=TaxJob.STATUS_UPLOADED,
+        created_by=user.id
+    )
+    db.add(new_job)
+    db.commit()
+    db.refresh(new_job)
+
+    # 3. Create file storage path & write file securely to disk
+    job_storage_dir = os.path.join("storage", "jobs", str(new_job.id))
+    os.makedirs(job_storage_dir, exist_ok=True)
+    file_dest_path = os.path.join(job_storage_dir, "initial.zip")
+
+    try:
+        with open(file_dest_path, "wb") as buffer:
+            shutil.copyfileobj(zip_file.file, buffer)
+    except Exception as e:
+        # Roll back database entry if file write failed
+        db.delete(new_job)
+        db.commit()
+        return RedirectResponse(
+            url=f"/jobs/new?error=Failed+to+save+uploaded+file:+{str(e)}",
+            status_code=status.HTTP_303_SEE_OTHER
+        )
+
+    # 4. Generate upload_rounds INITIAL record
+    new_round = UploadRound(
+        tax_job_id=new_job.id,
+        round_number=1,
+        upload_type=UploadRound.TYPE_INITIAL,
+        zip_path=file_dest_path,
+        status=TaxJob.STATUS_UPLOADED
+    )
+    db.add(new_round)
+
+    # 5. Link file paths back to the main tax_job record
+    new_job.uploaded_zip_path = file_dest_path
+    db.commit()
+
+    return RedirectResponse(url="/dashboard", status_code=status.HTTP_303_SEE_OTHER)
