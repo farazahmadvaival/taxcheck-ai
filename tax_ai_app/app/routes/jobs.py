@@ -90,4 +90,13 @@ def upload_job(
     new_job.uploaded_zip_path = file_dest_path
     db.commit()
 
+    # 6. Enqueue the background processing task and flip status to 'QUEUED'
+    from app.services.queue_service import queue
+    from app.worker.tasks import process_tax_job_task
+
+    queue.enqueue(process_tax_job_task, new_job.id)
+    
+    new_job.status = TaxJob.STATUS_QUEUED
+    db.commit()
+
     return RedirectResponse(url="/dashboard", status_code=status.HTTP_303_SEE_OTHER)
