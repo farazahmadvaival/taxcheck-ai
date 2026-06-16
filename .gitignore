@@ -1,0 +1,6 @@
+.venv/
+__pycache__/
+*.pyc
+.env
+tax_ai_app/.env
+tax_ai_app/storage/

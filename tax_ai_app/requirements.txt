@@ -1,0 +1,12 @@
+fastapi
+uvicorn
+sqlalchemy
+alembic
+psycopg2-binary
+redis
+rq
+jinja2
+pyinstaller
+openpyxl
+bcrypt
+python-multipart
