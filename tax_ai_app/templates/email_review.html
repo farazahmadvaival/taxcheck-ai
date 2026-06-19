@@ -1,0 +1,93 @@
+{% extends "base.html" %}
+
+{% block title %}Review Document Request Email - TaxCheck Platform{% endblock %}
+
+{% block content %}
+<div class="max-w-4xl mx-auto space-y-6">
+    
+    <!-- Navigation Back Link -->
+    <div>
+        <a href="/jobs/{% if job %}{{ job.id }}{% endif %}" class="inline-flex items-center text-xs font-semibold text-emerald-400 hover:text-emerald-300 transition-colors mb-2">
+            &larr; Back to Job Detail
+        </a>
+        <h1 class="text-2xl font-bold text-white tracking-tight">Review Document Request Email</h1>
+        <p class="text-sm text-slate-400">Polish the synthesized draft before transmitting it to the client.</p>
+    </div>
+
+    <!-- Error Alert if present -->
+    {% if request.query_params.get('error') %}
+    <div class="p-4 rounded-xl border border-rose-500/20 bg-rose-500/10 text-rose-400 text-sm flex items-center gap-3">
+        <svg class="h-5 w-5 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+        </svg>
+        <span>{{ request.query_params.get('error') }}</span>
+    </div>
+    {% endif %}
+
+    <!-- Main Grid -->
+    <div class="grid grid-cols-1 lg:grid-cols-12 gap-8">
+        
+        <!-- Left Side: Editable Email Form (8 Cols) -->
+        <div class="lg:col-span-8 bg-slate-900/20 p-6 rounded-2xl border border-slate-800/80 backdrop-blur-md">
+            <form action="/jobs/{{ job.id }}/email/send" method="post" class="space-y-5">
+                <!-- Recipient Read-Only Display -->
+                <div class="space-y-1">
+                    <label class="block text-xs font-bold text-slate-400 uppercase tracking-wider">To</label>
+                    <input type="text" value="{{ job.client_email }}" disabled 
+                           class="w-full bg-slate-950/40 text-slate-400 px-4 py-2.5 rounded-lg border border-slate-800 text-sm font-medium cursor-not-allowed">
+                </div>
+
+                <!-- Subject Line Input -->
+                <div class="space-y-1">
+                    <label for="subject" class="block text-xs font-bold text-slate-400 uppercase tracking-wider">Subject</label>
+                    <input type="text" id="subject" name="subject" value="{{ email_record.subject }}" required
+                           class="w-full bg-slate-950/60 text-white px-4 py-2.5 rounded-lg border border-slate-800 focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500/20 text-sm font-medium transition-all">
+                </div>
+
+                <!-- Email Body Textarea -->
+                <div class="space-y-1">
+                    <label for="body" class="block text-xs font-bold text-slate-400 uppercase tracking-wider">Email Body</label>
+                    <textarea id="body" name="body" rows="15" required
+                              class="w-full bg-slate-950/60 text-slate-200 px-4 py-3 rounded-lg border border-slate-800 focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500/20 text-sm leading-relaxed transition-all font-sans">{{ email_record.body }}</textarea>
+                </div>
+
+                <!-- Actions -->
+                <div class="flex items-center justify-between pt-2 border-t border-slate-800/60">
+                    <span class="text-xs text-slate-500">Draft generated using Gemini Flash</span>
+                    <button type="submit" 
+                            class="inline-flex items-center space-x-2 py-2.5 px-6 rounded-lg bg-gradient-to-r from-emerald-500 to-teal-500 hover:from-emerald-400 hover:to-teal-400 text-slate-950 font-bold transition-all transform hover:-translate-y-0.5 shadow-lg shadow-teal-500/10 text-sm">
+                        <svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5">
+                            <path stroke-linecap="round" stroke-linejoin="round" d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8" />
+                        </svg>
+                        <span>Send Email</span>
+                    </button>
+                </div>
+            </form>
+        </div>
+
+        <!-- Right Side: Included Approved Items (4 Cols) -->
+        <div class="lg:col-span-4 space-y-4">
+            <div class="bg-slate-900/20 p-5 rounded-2xl border border-slate-800/80 backdrop-blur-md space-y-4">
+                <h3 class="text-xs font-bold text-slate-400 uppercase tracking-wider border-b border-slate-800/60 pb-2">Requested Anomalies</h3>
+                <div class="space-y-3 max-h-[450px] overflow-y-auto pr-1">
+                    {% for item in approved_items %}
+                    <div class="p-3.5 rounded-xl border border-emerald-500/10 bg-emerald-950/5 space-y-1 text-xs">
+                        <div class="font-bold text-white flex items-center justify-between">
+                            <span>{{ item.title }}</span>
+                            <span class="text-[9px] px-1.5 py-0.5 rounded bg-emerald-500/20 text-emerald-300 font-semibold border border-emerald-500/30 uppercase">Approved</span>
+                        </div>
+                        <p class="text-slate-350 text-[11px] leading-relaxed">{{ item.description }}</p>
+                        {% if item.recommended_document %}
+                        <div class="text-[10px] text-slate-400 pt-1">
+                            <span class="font-semibold text-emerald-450">Required:</span> {{ item.recommended_document }}
+                        </div>
+                        {% endif %}
+                    </div>
+                    {% endfor %}
+                </div>
+            </div>
+        </div>
+
+    </div>
+</div>
+{% endblock %}

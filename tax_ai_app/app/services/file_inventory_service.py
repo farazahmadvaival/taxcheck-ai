@@ -8,12 +8,20 @@ def build_file_inventory(job_id: int, upload_round_id: int, extracted_dir: str, 
     Scans the extracted files folder, indexes each file into database, and logs a summary log.
     """
     print(f"Building file inventory for job ID: {job_id}, round ID: {upload_round_id} in {extracted_dir}")
+    
+    # Clear existing inventory for this round to prevent duplicates on reprocessing
+    db.query(JobFile).filter(
+        JobFile.tax_job_id == job_id,
+        JobFile.upload_round_id == upload_round_id
+    ).delete()
+    db.commit()
+    
     files_indexed = []
 
     for root, dirs, files in os.walk(extracted_dir):
         for filename in files:
-            # Ignore hidden files, system files (like .DS_Store), and macOS archive metadata files
-            if filename.startswith(".") or "__MACOSX" in root:
+            # Ignore hidden files, system files (like .DS_Store), macOS archive metadata, and generated text files
+            if filename.startswith(".") or "__MACOSX" in root or filename.endswith(".txt"):
                 continue
 
             full_path = os.path.join(root, filename)

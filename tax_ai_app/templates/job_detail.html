@@ -1,0 +1,392 @@
+{% extends "base.html" %}
+
+{% block title %}Job Details - TaxCheck Platform{% endblock %}
+
+{% block head %}
+<script>
+    const STATUS_STYLES = {
+        'OPEN': 'bg-slate-800/40 text-slate-400 border border-slate-700',
+        'APPROVED': 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20',
+        'IGNORED': 'bg-slate-900 text-slate-500 border border-slate-800/80',
+        'RESOLVED': 'bg-cyan-500/10 text-cyan-400 border border-cyan-500/20'
+    };
+
+    const CONTAINER_CLASSES = {
+        'OPEN': 'p-5 rounded-xl border border-slate-800/80 bg-slate-900/40 space-y-3 transition-all duration-300',
+        'APPROVED': 'p-5 rounded-xl border border-emerald-500/20 bg-emerald-950/5 space-y-3 transition-all duration-300',
+        'RESOLVED': 'p-5 rounded-xl border border-cyan-500/20 bg-cyan-950/5 space-y-3 transition-all duration-300',
+        'IGNORED': 'p-5 rounded-xl border border-slate-900 bg-slate-900/10 space-y-3 transition-all duration-300 opacity-60'
+    };
+
+    const BUTTON_STYLES = {
+        'OPEN': {
+            active: 'px-2.5 py-1 rounded text-xs font-semibold transition-all shrink-0 bg-slate-700 text-slate-100 border border-slate-600 select-none cursor-default',
+            inactive: 'px-2.5 py-1 rounded text-xs font-semibold transition-all shrink-0 border border-slate-750 hover:border-slate-600 text-slate-450 hover:text-slate-200'
+        },
+        'APPROVED': {
+            active: 'px-2.5 py-1 rounded text-xs font-semibold transition-all shrink-0 bg-emerald-600 text-slate-950 border border-emerald-500 select-none cursor-default',
+            inactive: 'px-2.5 py-1 rounded text-xs font-semibold transition-all shrink-0 border border-emerald-800/60 text-emerald-400 hover:bg-emerald-900/20'
+        },
+        'RESOLVED': {
+            active: 'px-2.5 py-1 rounded text-xs font-semibold transition-all shrink-0 bg-cyan-600 text-slate-950 border border-cyan-500 select-none cursor-default',
+            inactive: 'px-2.5 py-1 rounded text-xs font-semibold transition-all shrink-0 border border-cyan-800/60 text-cyan-400 hover:bg-cyan-900/20'
+        },
+        'IGNORED': {
+            active: 'px-2.5 py-1 rounded text-xs font-semibold transition-all shrink-0 bg-slate-800 text-slate-400 border border-slate-700 select-none cursor-default',
+            inactive: 'px-2.5 py-1 rounded text-xs font-semibold transition-all shrink-0 border border-slate-800 text-slate-500 hover:bg-slate-800'
+        }
+    };
+
+    function updateItemUI(itemId, newStatus) {
+        // Update container
+        const container = document.getElementById(`checklist-item-${itemId}`);
+        if (container) {
+            container.className = CONTAINER_CLASSES[newStatus];
+        }
+
+        // Update badge
+        const badge = document.getElementById(`status-badge-${itemId}`);
+        if (badge) {
+            badge.className = `inline-flex items-center px-2 py-0.5 rounded text-[10px] font-bold uppercase ${STATUS_STYLES[newStatus]}`;
+            badge.innerText = newStatus;
+        }
+
+        // Update buttons classes
+        const forms = document.querySelectorAll(`form[data-item-id="${itemId}"]`);
+        forms.forEach(form => {
+            const status = form.getAttribute('data-status');
+            const button = form.querySelector('button');
+            if (button) {
+                if (status === newStatus) {
+                    button.className = BUTTON_STYLES[status].active;
+                } else {
+                    button.className = BUTTON_STYLES[status].inactive;
+                }
+            }
+        });
+    }
+
+    document.addEventListener("DOMContentLoaded", () => {
+        document.addEventListener("submit", async (e) => {
+            if (e.target && e.target.classList.contains("status-form")) {
+                e.preventDefault();
+                const form = e.target;
+                const itemId = form.getAttribute("data-item-id");
+                const newStatus = form.getAttribute("data-status");
+                const url = form.getAttribute("action");
+                
+                try {
+                    const response = await fetch(url, {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/x-www-form-urlencoded',
+                        },
+                        body: new URLSearchParams({ status: newStatus })
+                    });
+                    const data = await response.json();
+                    if (data.success) {
+                        updateItemUI(itemId, newStatus);
+                    } else {
+                        alert('Error: Failed to update status.');
+                    }
+                } catch (err) {
+                    console.error(err);
+                    alert('Error updating status.');
+                }
+            }
+        });
+    });
+</script>
+{% endblock %}
+
+{% block content %}
+<div class="space-y-6">
+    <!-- Back Navigation and Header -->
+    <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+        <div>
+            <a href="/dashboard" class="inline-flex items-center text-xs font-semibold text-emerald-400 hover:text-emerald-300 transition-colors mb-2">
+                &larr; Back to Dashboard
+            </a>
+            <h1 class="text-2xl font-bold text-white tracking-tight">Job Detail: {{ job.client_name }}</h1>
+            <p class="text-sm text-slate-400">Manage checklist anomalies and audit findings.</p>
+        </div>
+        <div class="flex items-center gap-3">
+            <span class="text-sm text-slate-400">Overall Job Status:</span>
+            {% if job.status == 'UPLOADED' %}
+            <span class="inline-flex items-center px-3 py-1 rounded-full text-xs font-semibold bg-blue-500/10 text-blue-400 border border-blue-500/20">Uploaded</span>
+            {% elif job.status == 'QUEUED' %}
+            <span class="inline-flex items-center px-3 py-1 rounded-full text-xs font-semibold bg-indigo-500/10 text-indigo-400 border border-indigo-500/20">Queued</span>
+            {% elif job.status == 'PROCESSING' %}
+            <span class="inline-flex items-center px-3 py-1 rounded-full text-xs font-semibold bg-amber-500/10 text-amber-400 border border-amber-500/20 animate-pulse">Processing</span>
+            {% elif job.status == 'REVIEW_NEEDED' %}
+            <span class="inline-flex items-center px-3 py-1 rounded-full text-xs font-semibold bg-orange-500/10 text-orange-400 border border-orange-500/20">Review Needed</span>
+            {% elif job.status == 'EMAIL_DRAFTED' %}
+            <span class="inline-flex items-center px-3 py-1 rounded-full text-xs font-semibold bg-teal-500/10 text-teal-400 border border-teal-500/20">Email Drafted</span>
+            {% elif job.status == 'EMAIL_SENT' %}
+            <span class="inline-flex items-center px-3 py-1 rounded-full text-xs font-semibold bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">Email Sent</span>
+            {% elif job.status == 'WAITING_CLIENT_DOCUMENTS' %}
+            <span class="inline-flex items-center px-3 py-1 rounded-full text-xs font-semibold bg-purple-500/10 text-purple-400 border border-purple-500/20">Waiting Docs</span>
+            {% elif job.status == 'REPROCESSING' %}
+            <span class="inline-flex items-center px-3 py-1 rounded-full text-xs font-semibold bg-cyan-500/10 text-cyan-400 border border-cyan-500/20 animate-pulse">Reprocessing</span>
+            {% elif job.status == 'COMPLETED' %}
+            <span class="inline-flex items-center px-3 py-1 rounded-full text-xs font-semibold bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">Completed</span>
+            {% elif job.status == 'FAILED' %}
+            <span class="inline-flex items-center px-3 py-1 rounded-full text-xs font-semibold bg-rose-500/10 text-rose-400 border border-rose-500/20">Failed</span>
+            {% else %}
+            <span class="inline-flex items-center px-3 py-1 rounded-full text-xs font-semibold bg-slate-500/10 text-slate-400 border border-slate-500/20">{{ job.status }}</span>
+            {% endif %}
+        </div>
+    </div>
+
+    <!-- Error/Success Alerts -->
+    {% if request.query_params.get('error') %}
+    <div class="p-4 rounded-xl border border-rose-500/20 bg-rose-500/10 text-rose-400 text-sm flex items-center gap-3">
+        <svg class="h-5 w-5 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+        </svg>
+        <span>{{ request.query_params.get('error') }}</span>
+    </div>
+    {% endif %}
+    {% if request.query_params.get('success') %}
+    <div class="p-4 rounded-xl border border-emerald-500/20 bg-emerald-500/10 text-emerald-400 text-sm flex items-center gap-3">
+        <svg class="h-5 w-5 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+        </svg>
+        <span>{{ request.query_params.get('success') }}</span>
+    </div>
+    {% endif %}
+
+    <!-- Two Column Layout -->
+    <div class="grid grid-cols-1 lg:grid-cols-12 gap-8">
+        
+        <!-- Left Column: Job Metadata & File Inventory (4 Cols) -->
+        <div class="lg:col-span-5 space-y-6">
+            <!-- Job Metadata Card -->
+            <div class="bg-slate-900/20 p-6 rounded-2xl border border-slate-800/80 backdrop-blur-md space-y-4">
+                <h2 class="text-base font-semibold text-white border-b border-slate-800/60 pb-2">Job Metadata</h2>
+                <div class="grid grid-cols-2 gap-4 text-sm">
+                    <div>
+                        <span class="block text-xs text-slate-500 font-medium">Status</span>
+                        <span class="text-slate-200 font-semibold uppercase tracking-wider text-xs">{{ job.status }}</span>
+                    </div>
+                    <div>
+                        <span class="block text-xs text-slate-500 font-medium">Client Email</span>
+                        <span class="text-slate-200 break-all">{{ job.client_email }}</span>
+                    </div>
+                    <div>
+                        <span class="block text-xs text-slate-500 font-medium">Tax Year</span>
+                        <span class="text-slate-200">{{ job.tax_year }}</span>
+                    </div>
+                    <div>
+                        <span class="block text-xs text-slate-500 font-medium">Return Type</span>
+                        <span class="text-slate-200 font-mono text-xs uppercase">{{ job.return_type }}</span>
+                    </div>
+                    <div>
+                        <span class="block text-xs text-slate-500 font-medium">Round Number</span>
+                        <span class="text-slate-200">
+                            {{ job.upload_rounds | length if job.upload_rounds else 1 }}
+                        </span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Discovered Files Card -->
+            <div class="bg-slate-900/20 p-6 rounded-2xl border border-slate-800/80 backdrop-blur-md space-y-4">
+                <h2 class="text-base font-semibold text-white border-b border-slate-800/60 pb-2">Discovered Files</h2>
+                {% if not files %}
+                <p class="text-xs text-slate-500 py-4 text-center">No files in inventory.</p>
+                {% else %}
+                <div class="space-y-3 max-h-[400px] overflow-y-auto pr-1">
+                    {% for file in files %}
+                    <div class="p-3.5 rounded-xl border border-slate-800/60 bg-slate-950/20 flex items-center justify-between gap-4">
+                        <div class="min-w-0">
+                            <div class="font-medium text-white truncate text-xs" title="{{ file.file_name }}">{{ file.file_name }}</div>
+                            <div class="text-[10px] text-slate-550 truncate mt-0.5" title="{{ file.file_path }}">{{ file.file_path }}</div>
+                        </div>
+                        <div class="flex flex-col items-end gap-1 shrink-0 text-right">
+                            {% if file.detected_document_type %}
+                            <span class="inline-flex px-1.5 py-0.5 rounded text-[9px] font-bold bg-slate-800 text-teal-400 border border-slate-700 tracking-wider">
+                                {{ file.detected_document_type }}
+                            </span>
+                            {% endif %}
+                            
+                            <span class="text-[9px] text-slate-500 uppercase font-mono">
+                                {{ file.extraction_method or 'Unprocessed' }}
+                            </span>
+                        </div>
+                    </div>
+                    {% endfor %}
+                </div>
+                {% endif %}
+            </div>
+
+            <!-- Upload Additional Documents Card -->
+            <div class="bg-slate-900/20 p-6 rounded-2xl border border-slate-800/80 backdrop-blur-md space-y-4">
+                <h2 class="text-base font-semibold text-white border-b border-slate-800/60 pb-2">Upload Additional Documents</h2>
+                <form action="/jobs/{{ job.id }}/additional-documents" method="POST" enctype="multipart/form-data" class="space-y-4">
+                    <div class="space-y-1">
+                        <label for="zip_file" class="block text-xs font-bold text-slate-400 uppercase tracking-wider">ZIP Archive</label>
+                        <input type="file" id="zip_file" name="zip_file" accept=".zip" required
+                               class="w-full bg-slate-950/60 text-slate-200 px-3 py-2 rounded-lg border border-slate-800 text-xs focus:border-emerald-500 transition-all file:mr-4 file:py-1 file:px-3 file:rounded-md file:border-0 file:text-xs file:font-semibold file:bg-emerald-500/10 file:text-emerald-400 hover:file:bg-emerald-500/20 file:cursor-pointer">
+                    </div>
+                    <button type="submit"
+                            class="w-full inline-flex items-center justify-center space-x-2 py-2 px-4 rounded-lg bg-gradient-to-r from-emerald-500 to-teal-500 hover:from-emerald-400 hover:to-teal-400 text-slate-950 font-bold transition-all transform hover:-translate-y-0.5 shadow-lg shadow-teal-500/10 text-xs">
+                        <svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5">
+                            <path stroke-linecap="round" stroke-linejoin="round" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" />
+                        </svg>
+                        <span>Upload & Reprocess</span>
+                    </button>
+                </form>
+            </div>
+        </div>
+
+        <!-- Right Column: Checklist Items (7 Cols) -->
+        <div class="lg:col-span-7 space-y-6">
+            <div class="bg-slate-900/20 p-6 rounded-2xl border border-slate-800/80 backdrop-blur-md space-y-6">
+                <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-slate-800/60 pb-3">
+                    <div>
+                        <h2 class="text-base font-semibold text-white">Anomalies & Missing Documents Checklist</h2>
+                        <span class="text-xs text-slate-400 font-medium">{{ checklist_items | length }} items total</span>
+                    </div>
+                    <div>
+                        <a href="/jobs/{{ job.id }}/email" 
+                           class="inline-flex items-center space-x-2.5 py-2 px-4 rounded-lg bg-gradient-to-r from-emerald-500 to-teal-500 hover:from-emerald-400 hover:to-teal-400 text-slate-950 font-bold transition-all transform hover:-translate-y-0.5 shadow-lg shadow-teal-500/10 text-xs">
+                            <svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5">
+                                <path stroke-linecap="round" stroke-linejoin="round" d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
+                            </svg>
+                            <span>Draft Request Email</span>
+                        </a>
+                    </div>
+                </div>
+
+                {% if not checklist_items %}
+                <div class="py-12 text-center text-slate-500 text-sm">
+                    <svg class="mx-auto h-8 w-8 text-emerald-400/80 mb-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                        <path stroke-linecap="round" stroke-linejoin="round" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                    </svg>
+                    <p class="font-semibold text-slate-300">Clean checklist! No anomalies found.</p>
+                    <p class="text-xs text-slate-550 mt-1">This job is completely ready for tax return processing.</p>
+                </div>
+                {% else %}
+                <div class="space-y-4">
+                    {% for item in checklist_items %}
+                    <div id="checklist-item-{{ item.id }}" class="p-5 rounded-xl border space-y-3 transition-all duration-300
+                        {% if item.status == 'APPROVED' %}
+                        border-emerald-500/20 bg-emerald-950/5
+                        {% elif item.status == 'RESOLVED' %}
+                        border-cyan-500/20 bg-cyan-950/5
+                        {% elif item.status == 'IGNORED' %}
+                        border-slate-900 bg-slate-900/10 opacity-60
+                        {% else %}
+                        border-slate-800/80 bg-slate-900/40
+                        {% endif %}
+                    ">
+                        <div class="flex items-start justify-between gap-4">
+                            <div class="space-y-1.5">
+                                <h3 class="font-semibold text-white flex items-center gap-2">
+                                    {{ item.title }}
+                                    <span id="status-badge-{{ item.id }}" class="inline-flex items-center px-2 py-0.5 rounded text-[10px] font-bold uppercase
+                                        {% if item.status == 'APPROVED' %}
+                                        bg-emerald-500/10 text-emerald-400 border border-emerald-500/20
+                                        {% elif item.status == 'RESOLVED' %}
+                                        bg-cyan-500/10 text-cyan-400 border border-cyan-500/20
+                                        {% elif item.status == 'IGNORED' %}
+                                        bg-slate-900 text-slate-500 border border-slate-800/80
+                                        {% else %}
+                                        bg-slate-800/40 text-slate-400 border border-slate-700
+                                        {% endif %}
+                                    ">
+                                        {{ item.status }}
+                                    </span>
+                                </h3>
+                                <p class="text-xs text-slate-300 leading-relaxed">{{ item.description }}</p>
+                                {% if item.recommended_document %}
+                                <div class="text-[11px] text-slate-400 bg-slate-950/20 p-2 rounded-lg border border-slate-850/60 mt-2">
+                                    <strong class="text-emerald-400 font-semibold">Recommended Document:</strong>
+                                    <span class="text-slate-300 ml-1">{{ item.recommended_document }}</span>
+                                </div>
+                                {% endif %}
+                            </div>
+                            
+                            <!-- Severity Badge (Bootstrap pill styling using Tailwind) -->
+                            <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider shrink-0
+                                {% if item.severity == 'HIGH' %}
+                                bg-red-600 text-white
+                                {% elif item.severity == 'MEDIUM' %}
+                                bg-yellow-500 text-slate-900
+                                {% else %}
+                                bg-blue-600 text-white
+                                {% endif %}
+                            ">
+                                {{ item.severity }}
+                            </span>
+                        </div>
+                        
+                        <!-- Action Buttons / Forms -->
+                        <div class="flex flex-wrap gap-1.5 pt-2 border-t border-slate-800/40 justify-end">
+                            <!-- Open Form -->
+                            <form action="/checklist-items/{{ item.id }}" method="POST" class="status-form inline-block" data-item-id="{{ item.id }}" data-status="OPEN">
+                                <input type="hidden" name="status" value="OPEN">
+                                <button type="submit" class="px-2.5 py-1 rounded text-xs font-semibold transition-all shrink-0
+                                    {% if item.status == 'OPEN' %}
+                                    bg-slate-700 text-slate-100 border border-slate-600 select-none cursor-default
+                                    {% else %}
+                                    border border-slate-750 hover:border-slate-600 text-slate-450 hover:text-slate-200
+                                    {% endif %}
+                                ">
+                                    Open
+                                </button>
+                            </form>
+                            
+                            <!-- Approve Form -->
+                            <form action="/checklist-items/{{ item.id }}" method="POST" class="status-form inline-block" data-item-id="{{ item.id }}" data-status="APPROVED">
+                                <input type="hidden" name="status" value="APPROVED">
+                                <button type="submit" class="px-2.5 py-1 rounded text-xs font-semibold transition-all shrink-0
+                                    {% if item.status == 'APPROVED' %}
+                                    bg-emerald-600 text-slate-950 border border-emerald-500 select-none cursor-default
+                                    {% else %}
+                                    border border-emerald-800/60 text-emerald-400 hover:bg-emerald-900/20
+                                    {% endif %}
+                                ">
+                                    Approve
+                                </button>
+                            </form>
+                            
+                            <!-- Resolve Form -->
+                            <form action="/checklist-items/{{ item.id }}" method="POST" class="status-form inline-block" data-item-id="{{ item.id }}" data-status="RESOLVED">
+                                <input type="hidden" name="status" value="RESOLVED">
+                                <button type="submit" class="px-2.5 py-1 rounded text-xs font-semibold transition-all shrink-0
+                                    {% if item.status == 'RESOLVED' %}
+                                    bg-cyan-600 text-slate-950 border border-cyan-500 select-none cursor-default
+                                    {% else %}
+                                    border border-cyan-800/60 text-cyan-400 hover:bg-cyan-900/20
+                                    {% endif %}
+                                ">
+                                    Resolve
+                                </button>
+                            </form>
+                            
+                            <!-- Ignore Form -->
+                            <form action="/checklist-items/{{ item.id }}" method="POST" class="status-form inline-block" data-item-id="{{ item.id }}" data-status="IGNORED">
+                                <input type="hidden" name="status" value="IGNORED">
+                                <button type="submit" class="px-2.5 py-1 rounded text-xs font-semibold transition-all shrink-0
+                                    {% if item.status == 'IGNORED' %}
+                                    bg-slate-800 text-slate-400 border border-slate-700 select-none cursor-default
+                                    {% else %}
+                                    border border-slate-800 text-slate-500 hover:bg-slate-800
+                                    {% endif %}
+                                ">
+                                    Ignore
+                                </button>
+                            </form>
+                        </div>
+                    </div>
+                    {% endfor %}
+                </div>
+                {% endif %}
+            </div>
+        </div>
+
+    </div>
+</div>
+{% endblock %}
