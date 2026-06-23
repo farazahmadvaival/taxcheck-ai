@@ -14,7 +14,7 @@ from alembic import context
 config = context.config
 
 # Dynamically set the database URL from env variable
-database_url = os.getenv("DATABASE_URL", "postgresql://tax_ai:tax_ai_password@db:5432/tax_ai")
+database_url = os.getenv("DATABASE_URL", "postgresql://tax_ai:tax_ai_password@postgres:5432/tax_ai")
 config.set_main_option("sqlalchemy.url", database_url)
 
 # Interpret the config file for Python logging.

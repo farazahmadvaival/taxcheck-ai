@@ -10,7 +10,7 @@ from app.models.user import User
 
 router = APIRouter(tags=["Authentication"])
 
-# Setup Jinja2 templates (relative to tax_ai_app/)
+# Setup Jinja2 templates (relative to project root/)
 templates = Jinja2Templates(directory="templates")
 
 def hash_password(password: str) -> str:
