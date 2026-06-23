@@ -4,19 +4,19 @@
 
 {% block content %}
 <div class="max-w-2xl mx-auto flex flex-col items-center justify-center min-h-[70vh]">
-    <div class="w-full bg-slate-900/40 backdrop-blur-md border border-slate-800/80 p-8 rounded-2xl shadow-2xl space-y-6">
+    <div class="w-full bg-card text-card-foreground border border-border p-8 rounded-2xl shadow-2xl space-y-6">
         <div class="space-y-2">
-            <div class="flex items-center space-x-2 text-emerald-400">
+            <div class="flex items-center space-x-2 text-primary">
                 <a href="/dashboard" class="text-xs font-semibold hover:underline flex items-center space-x-1">
                     <span>&larr; Back to Dashboard</span>
                 </a>
             </div>
-            <h1 class="text-2xl font-bold tracking-tight text-white">Upload New Client Job</h1>
-            <p class="text-sm text-slate-400">Provide client information and upload the ZIP folder containing tax documents.</p>
+            <h1 class="text-2xl font-bold tracking-tight text-foreground">Upload New Client Job</h1>
+            <p class="text-sm text-muted-foreground">Provide client information and upload the ZIP folder containing tax documents.</p>
         </div>
 
         {% if error %}
-        <div class="p-3 rounded-lg border border-red-500/20 bg-red-500/10 text-xs text-red-400 flex items-center space-x-2">
+        <div class="p-3 rounded-lg border border-destructive/20 bg-destructive/10 text-xs text-destructive flex items-center space-x-2">
             <svg class="h-4 w-4 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
                 <path stroke-linecap="round" stroke-linejoin="round" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
             </svg>
@@ -27,23 +27,23 @@
         <form action="/jobs" method="post" enctype="multipart/form-data" class="space-y-5">
             <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div>
-                    <label for="client_name" class="block text-xs font-semibold text-slate-400 uppercase tracking-wider mb-1.5">Client Name</label>
+                    <label for="client_name" class="block text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-1.5">Client Name</label>
                     <input type="text" id="client_name" name="client_name" required placeholder="Acme Corp" 
-                           class="w-full px-4 py-3 rounded-lg border border-slate-800 bg-slate-950/60 text-white placeholder-slate-650 focus:outline-none focus:border-emerald-500/80 transition-colors text-sm">
+                           class="w-full px-4 py-3 rounded-lg border border-border bg-muted/20 text-foreground placeholder-muted-foreground focus:outline-none focus:border-primary transition-colors text-sm">
                 </div>
 
                 <div>
-                    <label for="client_email" class="block text-xs font-semibold text-slate-400 uppercase tracking-wider mb-1.5">Client Email</label>
+                    <label for="client_email" class="block text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-1.5">Client Email</label>
                     <input type="email" id="client_email" name="client_email" required placeholder="contact@acme.com" 
-                           class="w-full px-4 py-3 rounded-lg border border-slate-800 bg-slate-950/60 text-white placeholder-slate-650 focus:outline-none focus:border-emerald-500/80 transition-colors text-sm">
+                           class="w-full px-4 py-3 rounded-lg border border-border bg-muted/20 text-foreground placeholder-muted-foreground focus:outline-none focus:border-primary transition-colors text-sm">
                 </div>
             </div>
 
             <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div>
-                    <label for="tax_year" class="block text-xs font-semibold text-slate-400 uppercase tracking-wider mb-1.5">Tax Year</label>
+                    <label for="tax_year" class="block text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-1.5">Tax Year</label>
                     <select id="tax_year" name="tax_year" required 
-                            class="w-full px-4 py-3 rounded-lg border border-slate-800 bg-slate-950/60 text-white focus:outline-none focus:border-emerald-500/80 transition-colors text-sm">
+                            class="w-full px-4 py-3 rounded-lg border border-border bg-muted/20 text-foreground focus:outline-none focus:border-primary transition-colors text-sm">
                         <option value="2026">2026</option>
                         <option value="2025" selected>2025</option>
                         <option value="2024">2024</option>
@@ -53,9 +53,9 @@
                 </div>
 
                 <div>
-                    <label for="return_type" class="block text-xs font-semibold text-slate-400 uppercase tracking-wider mb-1.5">Return Type</label>
+                    <label for="return_type" class="block text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-1.5">Return Type</label>
                     <select id="return_type" name="return_type" required 
-                            class="w-full px-4 py-3 rounded-lg border border-slate-800 bg-slate-950/60 text-white focus:outline-none focus:border-emerald-500/80 transition-colors text-sm">
+                            class="w-full px-4 py-3 rounded-lg border border-border bg-muted/20 text-foreground focus:outline-none focus:border-primary transition-colors text-sm">
                         <option value="1120-S">1120-S (S-Corp)</option>
                         <option value="1065">1065 (Partnership)</option>
                         <option value="1120">1120 (C-Corp)</option>
@@ -65,19 +65,19 @@
             </div>
 
             <div>
-                <label class="block text-xs font-semibold text-slate-400 uppercase tracking-wider mb-1.5">Tax Document Package (ZIP)</label>
-                <div class="mt-1 flex justify-center px-6 pt-5 pb-6 border-2 border-slate-800 border-dashed rounded-lg bg-slate-950/30 hover:bg-slate-950/50 transition-colors">
+                <label class="block text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-1.5">Tax Document Package (ZIP)</label>
+                <div class="mt-1 flex justify-center px-6 pt-5 pb-6 border-2 border-border border-dashed rounded-lg bg-muted/10 hover:bg-muted/20 transition-colors">
                     <div class="space-y-1 text-center">
-                        <svg class="mx-auto h-12 w-12 text-slate-500" stroke="currentColor" fill="none" viewBox="0 0 48 48" aria-hidden="true">
+                        <svg class="mx-auto h-12 w-12 text-muted-foreground" stroke="currentColor" fill="none" viewBox="0 0 48 48" aria-hidden="true">
                             <path d="M28 8H12a4 4 0 00-4 4v20m32-12v8m0 0v8a4 4 0 01-4 4H12a4 4 0 01-4-4v-4m32-4l-3.172-3.172a4 4 0 00-5.656 0L28 28M8 32l9.172-9.172a4 4 0 015.656 0L28 28m0 0l4 4m4-24h8m-4-4v8m-12 4h.02" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" />
                         </svg>
-                        <div class="flex text-sm text-slate-400 justify-center">
-                            <label for="zip_file" class="relative cursor-pointer rounded-md font-semibold text-emerald-400 hover:text-emerald-300 focus-within:outline-none">
+                        <div class="flex text-sm text-muted-foreground justify-center">
+                            <label for="zip_file" class="relative cursor-pointer rounded-md font-semibold text-primary hover:text-primary/80 focus-within:outline-none">
                                 <span>Upload a ZIP file</span>
                                 <input id="zip_file" name="zip_file" type="file" accept=".zip" required class="sr-only">
                             </label>
                         </div>
-                        <p class="text-xs text-slate-550" id="file_name_display">Package must be under 50MB and strictly end with .zip</p>
+                        <p class="text-xs text-muted-foreground" id="file_name_display">Package must be under 50MB and strictly end with .zip</p>
                     </div>
                 </div>
             </div>
@@ -97,7 +97,7 @@
     fileInput.addEventListener('change', (e) => {
         if(fileInput.files.length > 0) {
             fileNameDisplay.textContent = 'Selected: ' + fileInput.files[0].name;
-            fileNameDisplay.classList.remove('text-slate-550');
+            fileNameDisplay.classList.remove('text-muted-foreground');
             fileNameDisplay.classList.add('text-emerald-400', 'font-medium');
         }
     });
