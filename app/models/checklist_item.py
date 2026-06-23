@@ -1,5 +1,5 @@
 from datetime import datetime
-from sqlalchemy import Column, Integer, String, Text, ForeignKey, DateTime
+from sqlalchemy import Column, Integer, String, Text, ForeignKey, DateTime, Float, Numeric, JSON
 from sqlalchemy.orm import relationship
 from app.database import Base
 
@@ -35,5 +35,16 @@ class ChecklistItem(Base):
     email_text = Column(Text, nullable=True)
     created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
 
+    # Advanced Anomaly Detection Fields (Option A)
+    rule_id = Column(String(50), nullable=True)
+    category = Column(String(100), nullable=True)
+    confidence_score = Column(Float, nullable=True)
+    extracted_amount = Column(Numeric(14, 2), nullable=True)
+    expected_amount = Column(Numeric(14, 2), nullable=True)
+    difference = Column(Numeric(14, 2), nullable=True)
+    tolerance = Column(Numeric(14, 2), nullable=True)
+    missing_support = Column(JSON, nullable=True)
+
     # Relationships
     tax_job = relationship("TaxJob", back_populates="checklist_items")
+

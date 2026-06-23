@@ -6,3 +6,12 @@ class Settings:
     GEMINI_API_KEY: str | None = os.environ.get("GEMINI_API_KEY")
 
 settings = Settings()
+
+ANOMALY_RULE_CONFIG = {
+    "default_tolerance_amount": 5.00,
+    "owner_loan_materiality_threshold": 10000.00,
+    "distribution_capital_tolerance": 5.00,
+    "ownership_distribution_percent_tolerance": 0.01,
+    "default_confidence_score": 0.75
+}
+

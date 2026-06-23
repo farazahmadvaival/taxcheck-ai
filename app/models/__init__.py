@@ -5,6 +5,7 @@ from app.models.job_file import JobFile
 from app.models.checklist_item import ChecklistItem
 from app.models.email_request import EmailRequest
 from app.models.processing_log import ProcessingLog
+from app.models.extracted_financial_value import ExtractedFinancialValue
 
 __all__ = [
     "User",
@@ -14,4 +15,6 @@ __all__ = [
     "ChecklistItem",
     "EmailRequest",
     "ProcessingLog",
+    "ExtractedFinancialValue",
 ]
+
