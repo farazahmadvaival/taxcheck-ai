@@ -5,7 +5,7 @@ from app.routes import auth, dashboard, jobs, checklist, email
 
 app = FastAPI(
     title="TaxCheck Platform",
-    description="Tax Document Anomaly Detection Platform - Phase 1",
+    description="Tax Document Anomaly Detection Platform - NexxelDigital",
     version="1.0.0"
 )
 
