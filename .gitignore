@@ -4,3 +4,4 @@ __pycache__/
 .env
 tax_ai_app/.env
 tax_ai_app/storage/
+.DS_Store
