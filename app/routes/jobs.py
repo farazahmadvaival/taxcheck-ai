@@ -1,5 +1,5 @@
-from fastapi import APIRouter, Depends, Request, Form, UploadFile, File, status
-from fastapi.responses import HTMLResponse, RedirectResponse
+from fastapi import APIRouter, Depends, Request, Form, UploadFile, File, status, HTTPException
+from fastapi.responses import HTMLResponse, RedirectResponse, FileResponse
 from fastapi.templating import Jinja2Templates
 from sqlalchemy.orm import Session
 import os
@@ -202,4 +202,55 @@ def upload_additional_documents(
     return RedirectResponse(
         url=f"/jobs/{id}?success=Additional+documents+uploaded+and+queued+for+processing.",
         status_code=status.HTTP_303_SEE_OTHER
+    )
+
+
+@router.get("/{id}/view-file", response_class=FileResponse)
+def view_file_by_name(id: int, filename: str, request: Request, db: Session = Depends(get_db_session)):
+    user = get_current_user_from_cookie(request, db)
+    if not user:
+        return RedirectResponse(url="/login", status_code=status.HTTP_303_SEE_OTHER)
+        
+    from app.models.job_file import JobFile
+    from sqlalchemy import func
+    
+    job_file = db.query(JobFile).filter(
+        JobFile.tax_job_id == id,
+        JobFile.file_name == filename
+    ).first()
+    
+    if not job_file:
+        job_file = db.query(JobFile).filter(
+            JobFile.tax_job_id == id,
+            func.lower(JobFile.file_name) == filename.lower()
+        ).first()
+        
+    if not job_file:
+        return RedirectResponse(
+            url=f"/jobs/{id}?error=File+not+found:+{filename}",
+            status_code=status.HTTP_303_SEE_OTHER
+        )
+        
+    physical_path = os.path.join(os.getcwd(), job_file.file_path)
+    if not os.path.exists(physical_path):
+        return RedirectResponse(
+            url=f"/jobs/{id}?error=Physical+file+not+found+on+disk",
+            status_code=status.HTTP_303_SEE_OTHER
+        )
+        
+    media_type = None
+    ext = job_file.file_type.lower()
+    if ext == "pdf":
+        media_type = "application/pdf"
+    elif ext in ["png", "jpg", "jpeg"]:
+        media_type = f"image/{ext}"
+    elif ext in ["txt", "log"]:
+        media_type = "text/plain"
+    elif ext in ["xls", "xlsx"]:
+        media_type = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+        
+    return FileResponse(
+        physical_path,
+        filename=job_file.file_name,
+        media_type=media_type
     )

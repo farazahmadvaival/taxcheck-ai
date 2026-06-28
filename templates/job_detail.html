@@ -221,9 +221,11 @@
                     {% for file in files %}
                     <div
                         class="p-3.5 rounded-lg border border-border bg-muted/10 flex items-center justify-between gap-4">
-                        <div class="min-w-0">
-                            <div class="font-medium text-foreground truncate text-xs" title="{{ file.file_name }}">{{
-                                file.file_name }}</div>
+                        <div class="min-w-0 flex-1">
+                            <a href="/jobs/{{ job.id }}/view-file?filename={{ file.file_name }}" target="_blank"
+                                class="font-medium text-primary hover:underline truncate text-xs block" title="{{ file.file_name }}">
+                                {{ file.file_name }}
+                            </a>
                             <div class="text-[10px] text-muted-foreground truncate mt-0.5" title="{{ file.file_path }}">
                                 {{ file.file_path }}</div>
                         </div>
@@ -368,6 +370,26 @@
                                     class="text-[11px] text-muted-foreground bg-muted/40 p-2 rounded-md border border-border/60 mt-2">
                                     <strong class="text-primary font-semibold">Recommended Document:</strong>
                                     <span class="text-foreground/80 ml-1">{{ item.recommended_document }}</span>
+                                </div>
+                                {% endif %}
+
+                                {% if item.source_file %}
+                                <div
+                                    class="text-[11px] text-muted-foreground bg-muted/40 p-2 rounded-md border border-border/60 mt-2 flex items-center justify-between gap-3">
+                                    <div class="truncate">
+                                        <strong class="text-primary font-semibold">Evidence File:</strong>
+                                        <span class="text-foreground/80 ml-1 font-mono text-[10px]" title="{{ item.source_file }}">{{ item.source_file }}</span>
+                                        {% if item.source_page %}
+                                        <span class="text-muted-foreground ml-1">(Page {{ item.source_page }})</span>
+                                        {% endif %}
+                                    </div>
+                                    <a href="/jobs/{{ job.id }}/view-file?filename={{ item.source_file }}" target="_blank"
+                                       class="inline-flex items-center space-x-1 px-2 py-0.5 rounded bg-primary/10 hover:bg-primary/20 text-primary font-bold transition-all text-[9px] uppercase tracking-wider border border-primary/20 shrink-0">
+                                        <svg class="h-3 w-3 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5">
+                                            <path stroke-linecap="round" stroke-linejoin="round" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
+                                        </svg>
+                                        <span>View Document</span>
+                                    </a>
                                 </div>
                                 {% endif %}
                             </div>
