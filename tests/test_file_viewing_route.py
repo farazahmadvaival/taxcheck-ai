@@ -44,6 +44,7 @@ def test_view_file_by_name_success(mock_file_response, mock_exists, mock_get_use
     assert called_path.endswith("storage/jobs/1/extracted/round_1/test_doc.pdf")
     assert called_kwargs["filename"] == "test_doc.pdf"
     assert called_kwargs["media_type"] == "application/pdf"
+    assert called_kwargs["content_disposition_type"] == "inline"
 
 @patch("app.routes.jobs.get_current_user_from_cookie")
 @patch("app.routes.jobs.RedirectResponse")

@@ -252,5 +252,6 @@ def view_file_by_name(id: int, filename: str, request: Request, db: Session = De
     return FileResponse(
         physical_path,
         filename=job_file.file_name,
-        media_type=media_type
+        media_type=media_type,
+        content_disposition_type="inline"
     )
