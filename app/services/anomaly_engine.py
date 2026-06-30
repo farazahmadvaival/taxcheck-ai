@@ -195,6 +195,40 @@ def harvest_financial_metrics_regex(text: str) -> dict[str, float]:
         # Current Year Beginning Capital
         elif "current year" in line_lower and "beginning" in line_lower and "capital" in line_lower:
             extracted["current_year_beginning_capital"] = nums[0]
+            
+        # Taxable Income
+        elif "taxable income" in line_lower or ("tax" in line_lower and "income" in line_lower and not any(x in line_lower for x in ["book", "net", "state", "pre-tax", "before", "aaa"])):
+            extracted["taxable_income"] = nums[0]
+            
+        # Dividends
+        elif "dividend" in line_lower or "dividends" in line_lower:
+            extracted["dividends"] = nums[0]
+            
+        # AAA (Accumulated Adjustments Account)
+        elif "accumulated adjustments account" in line_lower or "aaa" in line_lower:
+            if "beginning" in line_lower or "start" in line_lower:
+                extracted["beginning_aaa"] = nums[0]
+            elif "ending" in line_lower or "end" in line_lower:
+                extracted["ending_aaa"] = nums[0]
+            elif len(nums) >= 2:
+                extracted["ending_aaa"] = nums[0]
+                extracted["beginning_aaa"] = nums[1]
+                
+        # Ordinary Business Income
+        elif "ordinary business income" in line_lower or "ordinary income" in line_lower:
+            extracted["ordinary_business_income"] = nums[0]
+            
+        # Separately Stated Income
+        elif "separately stated" in line_lower and "income" in line_lower:
+            extracted["separately_stated_income"] = nums[0]
+            
+        # Nondeductible Expenses
+        elif "nondeductible expense" in line_lower or "nondeductible expenses" in line_lower or "non-deductible expense" in line_lower or "non-deductible expenses" in line_lower:
+            extracted["nondeductible_expenses"] = nums[0]
+            
+        # Ending Capital
+        elif "ending" in line_lower and ("capital" in line_lower or "partner's capital" in line_lower or "shareholder's capital" in line_lower) and not "prior" in line_lower:
+            extracted["ending_capital"] = nums[0]
                 
     return extracted
 
@@ -251,7 +285,10 @@ def harvest_job_financial_metrics(job_id: int, db: Session):
         "partner_distributions", "retained_earnings_beginning", "retained_earnings_ending",
         "beginning_capital", "current_year_income", "capital_contributions",
         "shareholder_ownership_percentages", "shareholder_distribution_percentages",
-        "prior_year_ending_capital", "current_year_beginning_capital"
+        "prior_year_ending_capital", "current_year_beginning_capital",
+        "taxable_income", "dividends", "beginning_aaa", "ending_aaa",
+        "ordinary_business_income", "separately_stated_income", "nondeductible_expenses",
+        "ending_capital"
     ]
     
     for job_file in files:
@@ -276,9 +313,9 @@ def harvest_job_financial_metrics(job_id: int, db: Session):
             
             relevant_missing = []
             if is_balance_sheet:
-                relevant_missing = [k for k in missing_keys if "asset" in k or "liabilit" in k or "equity" in k or "cash" in k or "receivable" in k or "payable" in k or "inventory" in k or "retained" in k or "capital" in k]
+                relevant_missing = [k for k in missing_keys if "asset" in k or "liabilit" in k or "equity" in k or "cash" in k or "receivable" in k or "payable" in k or "inventory" in k or "retained" in k or "capital" in k or "aaa" in k]
             elif is_pnl:
-                relevant_missing = [k for k in missing_keys if "receipts" in k or "cogs" in k or "profit" in k or "income" in k]
+                relevant_missing = [k for k in missing_keys if "receipts" in k or "cogs" in k or "profit" in k or "income" in k or "ordinary" in k or "stated" in k or "nondeductible" in k or "dividend" in k]
                 
             if relevant_missing:
                 print(f"[AnomalyEngine] Running LLM fallback for {job_file.file_name} to extract: {relevant_missing}")
@@ -2208,6 +2245,360 @@ def check_rule_PY_003(job, doc_types, extracted_vals, files):
         review_required_by="TAX_PREPARER"
     )
 
+def check_rule_MREC_001(job, doc_types, extracted_vals, files, all_text_lower):
+    if job.return_type not in ["1120", "1120-S", "1065"]:
+        return make_anomaly_result(
+            rule_id="MREC-001",
+            rule_name="M-1 / M-3 Missing",
+            category="M_RECONCILIATION",
+            severity="HIGH",
+            status="SKIPPED",
+            return_type=job.return_type,
+            skip_reason="Rule only applies to 1120, 1120-S, or 1065 returns."
+        )
+        
+    can_run, reason = check_rule_preconditions(
+        required_values=["net_income", "taxable_income"],
+        extracted_values=extracted_vals
+    )
+    if not can_run:
+        return make_anomaly_result(
+            rule_id="MREC-001",
+            rule_name="M-1 / M-3 Missing",
+            category="M_RECONCILIATION",
+            severity="HIGH",
+            status="SKIPPED",
+            return_type=job.return_type,
+            skip_reason=reason
+        )
+        
+    net_income = extracted_vals["net_income"]
+    taxable_income = extracted_vals["taxable_income"]
+    difference = abs(net_income - taxable_income)
+    tolerance = ANOMALY_RULE_CONFIG.get("book_tax_difference_tolerance", 5.0)
+    
+    # Check if M-1/M-3 schedule is detected
+    m1_m3_terms = ["schedule m-1", "schedule m-3", "m-1", "m-3", "m1", "m3", "schedule m1", "schedule m3"]
+    has_m1_m3 = any(kw in all_text_lower for kw in m1_m3_terms) or any(
+        any(kw in f.file_name.lower() for kw in m1_m3_terms) for f in files
+    )
+    
+    reconciliation_required = difference > tolerance
+    
+    if reconciliation_required and not has_m1_m3:
+        status = "FLAGGED"
+        evidence_text = f"Book income (${net_income:,.2f}) differs from taxable income (${taxable_income:,.2f}) by ${difference:,.2f}, but no Schedule M-1 or M-3 book-tax reconciliation schedule was detected."
+    else:
+        status = "PASSED"
+        evidence_text = None
+        
+    return make_anomaly_result(
+        rule_id="MREC-001",
+        rule_name="M-1 / M-3 Missing",
+        category="M_RECONCILIATION",
+        severity="HIGH",
+        status=status,
+        return_type=job.return_type,
+        evidence_text=evidence_text,
+        extracted_amount=net_income,
+        expected_amount=taxable_income,
+        difference=difference,
+        tolerance=tolerance,
+        recommended_action="Please provide the Schedule M-1 or M-3 book-to-tax reconciliation schedule." if status == "FLAGGED" else "",
+        review_required_by="TAX_PREPARER"
+    )
+
+def check_rule_MREC_002(job, doc_types, extracted_vals, files, all_text_lower):
+    if job.return_type not in ["1120", "1120-S", "1065"]:
+        return make_anomaly_result(
+            rule_id="MREC-002",
+            rule_name="Book Income vs Tax Income Not Reconciled",
+            category="M_RECONCILIATION",
+            severity="HIGH",
+            status="SKIPPED",
+            return_type=job.return_type,
+            skip_reason="Rule only applies to 1120, 1120-S, or 1065 returns."
+        )
+        
+    can_run, reason = check_rule_preconditions(
+        required_values=["net_income", "taxable_income"],
+        extracted_values=extracted_vals
+    )
+    if not can_run:
+        return make_anomaly_result(
+            rule_id="MREC-002",
+            rule_name="Book Income vs Tax Income Not Reconciled",
+            category="M_RECONCILIATION",
+            severity="HIGH",
+            status="SKIPPED",
+            return_type=job.return_type,
+            skip_reason=reason
+        )
+        
+    net_income = extracted_vals["net_income"]
+    taxable_income = extracted_vals["taxable_income"]
+    difference = abs(net_income - taxable_income)
+    tolerance = ANOMALY_RULE_CONFIG.get("book_tax_difference_tolerance", 5.0)
+    
+    reconciliation_required = difference > tolerance
+    
+    # Check for reconciling items keywords
+    reconciling_keywords = [
+        "reconciling item", "reconciling items", "reconciling adjustment", "reconciling adjustments",
+        "book-to-tax", "book to tax", "book-tax", "book tax adjustment", "book tax adjustments",
+        "m-1 adjustment", "m-3 adjustment", "m1 adjustment", "m3 adjustment",
+        "temporary difference", "permanent difference", "meals and entertainment", "depreciation difference",
+        "nondeductible", "non-deductible", "tax penalty", "tax penalties", "penalties and fines",
+        "depreciation adjustment", "amortization adjustment"
+    ]
+    
+    has_reconciling_items = any(kw in all_text_lower for kw in reconciling_keywords)
+    
+    if reconciliation_required and not has_reconciling_items:
+        status = "FLAGGED"
+        evidence_text = f"Book income (${net_income:,.2f}) and taxable income (${taxable_income:,.2f}) differ by ${difference:,.2f}, but no reconciling items or adjustments were found in the documents."
+    else:
+        status = "PASSED"
+        evidence_text = None
+        
+    return make_anomaly_result(
+        rule_id="MREC-002",
+        rule_name="Book Income vs Tax Income Not Reconciled",
+        category="M_RECONCILIATION",
+        severity="HIGH",
+        status=status,
+        return_type=job.return_type,
+        evidence_text=evidence_text,
+        extracted_amount=net_income,
+        expected_amount=taxable_income,
+        difference=difference,
+        tolerance=tolerance,
+        recommended_action="Please provide the reconciling items or details of book-to-tax adjustments to explain the difference." if status == "FLAGGED" else "",
+        review_required_by="TAX_PREPARER"
+    )
+
+def check_rule_MREC_003(job, doc_types, extracted_vals, files, all_text_lower):
+    if job.return_type not in ["1120", "1120-S", "1065"]:
+        return make_anomaly_result(
+            rule_id="MREC-003",
+            rule_name="Non-Deductible Expense Support Missing",
+            category="M_RECONCILIATION",
+            severity="MEDIUM",
+            status="SKIPPED",
+            return_type=job.return_type,
+            skip_reason="Rule only applies to 1120, 1120-S, or 1065 returns."
+        )
+        
+    trigger_keywords = ["penalties", "fines", "political contribution", "meals", "entertainment", "life insurance", "nondeductible", "non-deductible"]
+    
+    detected_triggers = [kw for kw in trigger_keywords if kw in all_text_lower]
+    
+    if not detected_triggers:
+        return make_anomaly_result(
+            rule_id="MREC-003",
+            rule_name="Non-Deductible Expense Support Missing",
+            category="M_RECONCILIATION",
+            severity="MEDIUM",
+            status="SKIPPED",
+            return_type=job.return_type,
+            skip_reason="No non-deductible expense keywords detected in uploaded documents."
+        )
+        
+    # Check corresponding adjustment keywords
+    trigger_to_adjustment = {
+        "penalties": ["penalty adjustment", "penalties adjustment", "nondeductible penalties", "m-1 penalties", "m-3 penalties", "m1 penalties", "m3 penalties", "penalties reconciliation"],
+        "fines": ["fine adjustment", "fines adjustment", "nondeductible fines", "m-1 fines", "m-3 fines", "m1 fines", "m3 fines", "fines reconciliation"],
+        "political contribution": ["political adjustment", "political contributions adjustment", "nondeductible political", "m-1 political", "m-3 political", "m1 political", "m3 political"],
+        "meals": ["meals adjustment", "nondeductible meals", "meals limit", "50% meals", "m-1 meals", "m-3 meals", "m1 meals", "m3 meals", "meals reconciliation", "travel and entertainment"],
+        "entertainment": ["entertainment adjustment", "nondeductible entertainment", "50% entertainment", "m-1 entertainment", "m-3 entertainment", "m1 entertainment", "m3 entertainment", "entertainment reconciliation"],
+        "life insurance": ["life insurance adjustment", "nondeductible life insurance", "officer life insurance", "keyman life insurance", "m-1 life insurance", "m-3 life insurance", "m1 life insurance", "m3 life insurance", "life insurance reconciliation"],
+        "nondeductible": ["nondeductible adjustment", "m-1 nondeductible", "m-3 nondeductible", "m1 nondeductible", "m3 nondeductible", "nondeductible meals", "nondeductible penalties", "nondeductible fines", "nondeductible entertainment", "nondeductible political", "nondeductible life insurance"],
+        "non-deductible": ["non-deductible adjustment", "m-1 non-deductible", "m-3 non-deductible", "m1 non-deductible", "m3 non-deductible", "non-deductible meals", "non-deductible penalties", "non-deductible fines", "non-deductible entertainment", "non-deductible political", "non-deductible life insurance"]
+    }
+    
+    missing_adjustments = []
+    for trig in detected_triggers:
+        adj_kws = trigger_to_adjustment[trig]
+        if not any(kw in all_text_lower for kw in adj_kws):
+            missing_adjustments.append(trig)
+            
+    if missing_adjustments:
+        status = "FLAGGED"
+        evidence_text = f"Non-deductible expense keywords detected: {', '.join(detected_triggers)}, but no corresponding book-tax adjustments or Schedule M-1/M-3 treatment was found for: {', '.join(missing_adjustments)}."
+    else:
+        status = "PASSED"
+        evidence_text = None
+        
+    return make_anomaly_result(
+        rule_id="MREC-003",
+        rule_name="Non-Deductible Expense Support Missing",
+        category="M_RECONCILIATION",
+        severity="MEDIUM",
+        status=status,
+        return_type=job.return_type,
+        evidence_text=evidence_text,
+        recommended_action=f"Please verify that the detected non-deductible expenses ({', '.join(missing_adjustments)}) are properly treated as book-tax adjustments on Schedule M-1/M-3." if status == "FLAGGED" else "",
+        review_required_by="TAX_PREPARER"
+    )
+
+def check_rule_MREC_004(job, doc_types, extracted_vals, files):
+    if job.return_type not in ["1120", "1120-S", "1065"]:
+        return make_anomaly_result(
+            rule_id="MREC-004",
+            rule_name="Retained Earnings / AAA / Capital M-2 Mismatch",
+            category="M_RECONCILIATION",
+            severity="HIGH",
+            status="SKIPPED",
+            return_type=job.return_type,
+            skip_reason="Rule only applies to 1120, 1120-S, or 1065 returns."
+        )
+        
+    if job.return_type == "1120":
+        can_run, reason = check_rule_preconditions(
+            required_values=["retained_earnings_beginning", "retained_earnings_ending", "net_income"],
+            extracted_values=extracted_vals
+        )
+        if not can_run:
+            return make_anomaly_result(
+                rule_id="MREC-004",
+                rule_name="Retained Earnings / AAA / Capital M-2 Mismatch",
+                category="M_RECONCILIATION",
+                severity="HIGH",
+                status="SKIPPED",
+                return_type=job.return_type,
+                skip_reason=reason
+            )
+            
+        beg_re = extracted_vals["retained_earnings_beginning"]
+        end_re = extracted_vals["retained_earnings_ending"]
+        net_inc = extracted_vals["net_income"]
+        divs = extracted_vals.get("dividends", 0.0) or extracted_vals.get("shareholder_distributions", 0.0) or 0.0
+        
+        expected = beg_re + net_inc - divs
+        difference = abs(end_re - expected)
+        tolerance = ANOMALY_RULE_CONFIG.get("retained_earnings_rollforward_tolerance", 5.0)
+        
+        status = "FLAGGED" if difference > tolerance else "PASSED"
+        evidence_text = (
+            f"Retained earnings rollforward mismatch: Beginning RE (${beg_re:,.2f}) + Net Income (${net_inc:,.2f}) - Dividends (${divs:,.2f}) = "
+            f"Expected Ending RE (${expected:,.2f}) != Actual Ending RE (${end_re:,.2f}). Difference is ${difference:,.2f}."
+        ) if status == "FLAGGED" else None
+        
+        return make_anomaly_result(
+            rule_id="MREC-004",
+            rule_name="Retained Earnings / AAA / Capital M-2 Mismatch",
+            category="M_RECONCILIATION",
+            severity="HIGH",
+            status=status,
+            return_type=job.return_type,
+            evidence_text=evidence_text,
+            extracted_amount=end_re,
+            expected_amount=expected,
+            difference=difference,
+            tolerance=tolerance,
+            recommended_action="Please review the retained earnings rollforward details on Schedule M-2." if status == "FLAGGED" else "",
+            review_required_by="TAX_PREPARER"
+        )
+        
+    elif job.return_type == "1120-S":
+        can_run, reason = check_rule_preconditions(
+            required_values=["beginning_aaa", "ending_aaa", "ordinary_business_income"],
+            extracted_values=extracted_vals
+        )
+        if not can_run:
+            return make_anomaly_result(
+                rule_id="MREC-004",
+                rule_name="Retained Earnings / AAA / Capital M-2 Mismatch",
+                category="M_RECONCILIATION",
+                severity="HIGH",
+                status="SKIPPED",
+                return_type=job.return_type,
+                skip_reason=reason
+            )
+            
+        beg_aaa = extracted_vals["beginning_aaa"]
+        end_aaa = extracted_vals["ending_aaa"]
+        ord_inc = extracted_vals["ordinary_business_income"]
+        sep_inc = extracted_vals.get("separately_stated_income", 0.0) or 0.0
+        dists = extracted_vals.get("shareholder_distributions", 0.0) or 0.0
+        nonded = extracted_vals.get("nondeductible_expenses", 0.0) or 0.0
+        
+        expected = beg_aaa + ord_inc + sep_inc - dists - nonded
+        difference = abs(end_aaa - expected)
+        tolerance = ANOMALY_RULE_CONFIG.get("aaa_rollforward_tolerance", 5.0)
+        
+        status = "FLAGGED" if difference > tolerance else "PASSED"
+        evidence_text = (
+            f"AAA rollforward mismatch: Beginning AAA (${beg_aaa:,.2f}) + Ordinary Income (${ord_inc:,.2f}) + Separately Stated Income (${sep_inc:,.2f}) - "
+            f"Distributions (${dists:,.2f}) - Nondeductible Expenses (${nonded:,.2f}) = Expected Ending AAA (${expected:,.2f}) != Actual Ending AAA (${end_aaa:,.2f}). "
+            f"Difference is ${difference:,.2f}."
+        ) if status == "FLAGGED" else None
+        
+        return make_anomaly_result(
+            rule_id="MREC-004",
+            rule_name="Retained Earnings / AAA / Capital M-2 Mismatch",
+            category="M_RECONCILIATION",
+            severity="HIGH",
+            status=status,
+            return_type=job.return_type,
+            evidence_text=evidence_text,
+            extracted_amount=end_aaa,
+            expected_amount=expected,
+            difference=difference,
+            tolerance=tolerance,
+            recommended_action="Please review the Accumulated Adjustments Account (AAA) rollforward details on Schedule M-2." if status == "FLAGGED" else "",
+            review_required_by="TAX_PREPARER"
+        )
+        
+    elif job.return_type == "1065":
+        can_run, reason = check_rule_preconditions(
+            required_values=["beginning_capital", "ending_capital", "capital_contributions", "partner_distributions", "net_income"],
+            extracted_values=extracted_vals
+        )
+        if not can_run:
+            return make_anomaly_result(
+                rule_id="MREC-004",
+                rule_name="Retained Earnings / AAA / Capital M-2 Mismatch",
+                category="M_RECONCILIATION",
+                severity="HIGH",
+                status="SKIPPED",
+                return_type=job.return_type,
+                skip_reason=reason
+            )
+            
+        beg_cap = extracted_vals["beginning_capital"]
+        end_cap = extracted_vals["ending_capital"]
+        contrib = extracted_vals["capital_contributions"]
+        dists = extracted_vals["partner_distributions"]
+        net_inc = extracted_vals["net_income"]
+        
+        expected = beg_cap + contrib + net_inc - dists
+        difference = abs(end_cap - expected)
+        tolerance = ANOMALY_RULE_CONFIG.get("capital_rollforward_tolerance", 5.0)
+        
+        status = "FLAGGED" if difference > tolerance else "PASSED"
+        evidence_text = (
+            f"Partner capital rollforward mismatch: Beginning Capital (${beg_cap:,.2f}) + Contributions (${contrib:,.2f}) + Net Income (${net_inc:,.2f}) - "
+            f"Distributions (${dists:,.2f}) = Expected Ending Capital (${expected:,.2f}) != Actual Ending Capital (${end_cap:,.2f}). "
+            f"Difference is ${difference:,.2f}."
+        ) if status == "FLAGGED" else None
+        
+        return make_anomaly_result(
+            rule_id="MREC-004",
+            rule_name="Retained Earnings / AAA / Capital M-2 Mismatch",
+            category="M_RECONCILIATION",
+            severity="HIGH",
+            status=status,
+            return_type=job.return_type,
+            evidence_text=evidence_text,
+            extracted_amount=end_cap,
+            expected_amount=expected,
+            difference=difference,
+            tolerance=tolerance,
+            recommended_action="Please review the partners' capital account reconciliation details on Schedule M-2." if status == "FLAGGED" else "",
+            review_required_by="TAX_PREPARER"
+        )
+
 def run_anomaly_rules(job_id: int, db: Session) -> int:
     """
     Executes core missing-document, base rules, Phase 1 advanced anomaly checks, and Phase 2 entity rules.
@@ -2291,6 +2682,12 @@ def run_anomaly_rules(job_id: int, db: Session) -> int:
     raw_results.append(check_rule_OWN_003(job, doc_types, extracted_vals, files))
     raw_results.append(check_rule_OWN_004(job, doc_types, extracted_vals, files))
     raw_results.append(check_rule_PY_003(job, doc_types, extracted_vals, files))
+    
+    # Phase 3 M-Reconciliation Rules
+    raw_results.append(check_rule_MREC_001(job, doc_types, extracted_vals, files, all_text_lower))
+    raw_results.append(check_rule_MREC_002(job, doc_types, extracted_vals, files, all_text_lower))
+    raw_results.append(check_rule_MREC_003(job, doc_types, extracted_vals, files, all_text_lower))
+    raw_results.append(check_rule_MREC_004(job, doc_types, extracted_vals, files))
     
     # Filter and convert FLAGGED results to ChecklistItems
     findings = []

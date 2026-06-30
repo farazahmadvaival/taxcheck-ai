@@ -12,6 +12,10 @@ ANOMALY_RULE_CONFIG = {
     "owner_loan_materiality_threshold": 10000.00,
     "distribution_capital_tolerance": 5.00,
     "ownership_distribution_percent_tolerance": 0.01,
-    "default_confidence_score": 0.75
+    "default_confidence_score": 0.75,
+    "book_tax_difference_tolerance": 5.00,
+    "retained_earnings_rollforward_tolerance": 5.00,
+    "aaa_rollforward_tolerance": 5.00,
+    "capital_rollforward_tolerance": 5.00
 }
 
